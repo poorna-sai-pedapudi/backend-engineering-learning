@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>JSON Example</title>
+    </head>
+    <body>
+        <script type = "text/javascript">
+            let companies = 
+            [
+                {
+                    "name" : "Big Corporation",
+                    "num_employees" : 10000,
+                    "ceo" : "Mary",
+                    "ratings" : 3.5
+                },
+                {
+                    "name" : "Small Startup",
+                    "num_employees" : 30,
+                    "ceo" : null,
+                    "ratings" : 4.3
+                }
+            ]
+
+            console.log(JSON.parse(companies)[1])
+        </script>
+    </body>
+</html>

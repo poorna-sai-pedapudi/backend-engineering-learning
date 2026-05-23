@@ -1,9 +1,12 @@
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, status, Query
 from database import cursor, conn
 from models import User, LoginUser
 from auth import hash_password, verify_password
+import logging
 
 router = APIRouter()
+
+logger = logging.getLogger(__name__)
 
 
 ################################ USERS ########################################################
@@ -13,8 +16,11 @@ router = APIRouter()
 #API 1
 
 @router.get("/")
-def get_users(page:int = 1, limit: int = 5):
-    print("Fetching all users page = {page}, limit = {limit}")
+def get_users(
+    page:int = Query(1, ge=1),
+    limit: int = Query(5, ge=1, le=50)
+    ):
+    logger.info(f"Fetching all users page = {page}, limit = {limit}")
 
     offset = (page - 1) * limit
     cursor.execute("select * from users order by id limit %s offset %s", (limit, offset))
@@ -150,7 +156,7 @@ def login_user(user: LoginUser):
             detail={"error": "Invalid Password"}
         )
     
-    
+
     return {
         "message": "Login successful",
         "user": {
@@ -168,7 +174,7 @@ def login_user(user: LoginUser):
 
 @router.get("/{id}")
 def get_user(id: int):
-    print(f"Fetching user with id: {id}")
+    logger.info(f"Fetching user with id= {id}")
     cursor.execute("select * from users where id = %s", (id,))
     user = cursor.fetchone()
     
@@ -184,7 +190,7 @@ def get_user(id: int):
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
 def create_user(user: User):
-    print("Creating new user...")
+    logger.info("Creating new user")
 
     hashed_password = hash_password(user.password)
     cursor.execute(

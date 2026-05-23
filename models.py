@@ -1,10 +1,10 @@
 from pydantic import BaseModel, EmailStr, Field
 
 class User(BaseModel):
-    name: str = Field(min_length = 2, max_length = 50)
+    name: str = Field(min_length = 2, max_length = 50, pattern="^[A-Za-z ]+$")
     email: EmailStr
-    age: int = Field(gt=0)
-    password: str = Field(min_length=6)
+    age: int = Field(gt=0, le=120)
+    password: str = Field(min_length=6, max_length=100)
 
 class Order(BaseModel):
     user_id: int

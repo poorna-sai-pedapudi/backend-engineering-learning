@@ -93,3 +93,14 @@ SELECT * FROM users
 WHERE email IS NULL;
 
 ------------------------------------------------------------------------------------------------------------------
+
+alter table users
+add column password TEXT;
+
+select id, name, email, age, password
+from users
+order by id;
+
+select id, name, email, password
+from users
+where email = 'secure@example.com';

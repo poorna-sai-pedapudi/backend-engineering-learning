@@ -1,9 +1,12 @@
 from fastapi import APIRouter, HTTPException, status
 from database import cursor, conn
 from models import Order
+import logging
 
 
 router = APIRouter()
+
+logger = logging.getLogger(__name__)
 
 
 ################################ ORDERS ########################################################
@@ -12,7 +15,7 @@ router = APIRouter()
 # Get all orders
 @router.get("/")
 def get_orders(page: int = 1, limit: int = 5):
-    print("Fetching all orders page:{page}, limit:{limit}")
+    logger.info(f"Fetching all orders page:{page}, limit:{limit}")
 
     offset = (page - 1) * limit
 
@@ -226,7 +229,7 @@ def create_order(order: Order):
 
 @router.delete("/{id}")
 def delete_order(id: int):
-    print(f"Deleting order with id: {id}")
+    logger.info(f"Deleting order with id: {id}")
     cursor.execute(
         "delete from orders where id = %s returning *", (id,)
     )

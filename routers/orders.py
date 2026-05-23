@@ -11,11 +11,32 @@ router = APIRouter()
 # API 1
 # Get all orders
 @router.get("/")
-def get_orders():
-    cursor.execute("select * from orders")
+def get_orders(page: int = 1, limit: int = 5):
+    print("Fetching all orders page:{page}, limit:{limit}")
+
+    offset = (page - 1) * limit
+
+    cursor.execute(
+        """
+        select * from orders
+        order by id
+        limit %s offset %s
+        """,
+        (limit, offset)
+    )
+
     orders = cursor.fetchall()
+
+    cursor.execute("select count(*) as total from orders")
+    total = cursor.fetchone()["total"]
     
-    return orders
+    return {
+        "page": page,
+        "limit": limit,
+        "count": len(orders),
+        "total": total,
+        "data": orders
+    }
 
 
 
@@ -27,6 +48,7 @@ def get_orders():
 
 @router.get("/user/{user_id}")
 def orders_by_users(user_id: int):
+    print(f"Fetching order with id: {id}")
     cursor.execute(
         """
         select users.id as user_id, 
@@ -46,10 +68,42 @@ def orders_by_users(user_id: int):
     orders = cursor.fetchall()
 
     if len(orders) == 0:
-        raise HTTPException(status_code=404, detail = "No Orders found for this user")
+        raise HTTPException(status_code=404, detail = {"error": "No Orders found for this user"})
     
-    return orders
+    return {
+        "filter": "user_id",
+        "value": user_id,
+        "count": len(orders),
+        "data": orders
+    }
 
+# Add Sorting API
+
+@router.get("/sorted")
+def get_orders_sorted(order:str = "asc"):
+    print(f"Fetching orders sorted by price, order = {order}")
+
+    if order.lower() not in ["asc", "desc"]:
+        raise HTTPException(
+            status_code=400,
+            detail={"error": "Order must be asc or desc"}
+        )
+    
+    cursor.execute(
+        f"""
+        select * from orders
+        order by price {order.upper()}
+        """
+    )
+
+    orders = cursor.fetchall()
+
+    return {
+        "sort_by": "price",
+        "order": order,
+        "count": len(orders),
+        "data": orders
+    }
 
 
 # API 3
@@ -57,6 +111,7 @@ def orders_by_users(user_id: int):
 
 @router.get("/filter/price")
 def orders_by_price(min_price: float):
+    print("Fetching all orders by minimum price...")
     cursor.execute(
         """
         select * from orders
@@ -69,9 +124,41 @@ def orders_by_price(min_price: float):
     orders = cursor.fetchall()
 
     if len(orders) == 0:
-        raise HTTPException(status_code=404, detail = "No Orders found")
+        raise HTTPException(status_code=404, detail = {"error": "No Orders found"})
     
-    return orders
+    return {
+        "filter": "min_price",
+        "value": min_price,
+        "count": len(orders),
+        "data": orders
+    }
+
+
+
+# User Total Spent API
+@router.get("/user/{user_id}/total")
+def get_user_total(user_id: int):
+    print("Fetching total amount spent by user...")
+    cursor.execute(
+        """
+        select users.id as user_id,
+            users.name, 
+            coalesce(sum(orders.price), 0) as total_spent
+        from users 
+        left join orders
+        on users.id = orders.user_id
+        where users.id = %s
+        group by users.id, users.name
+        """,
+        (user_id,)
+    )
+
+    result = cursor.fetchone()
+
+    if result is None:
+        raise HTTPException(status_code=404, detail={"error": "User not found"})
+    
+    return result
 
 
 
@@ -79,11 +166,12 @@ def orders_by_price(min_price: float):
 # Get order by id
 @router.get("/{id}")
 def get_order(id: int):
+    print("Fetching all orders...")
     cursor.execute("select * from orders where id = %s", (id,))
     order = cursor.fetchone()
 
     if order is None:
-        raise HTTPException(status_code=404, detail =  "Order not found")
+        raise HTTPException(status_code=404, detail = {"error": "Order not found"})
     
     return order
 
@@ -117,6 +205,7 @@ def get_order(id: int):
 
 @router.post("/", status_code=status.HTTP_201_CREATED)
 def create_order(order: Order):
+    print("Creating new order...")
     cursor.execute(
         """
         insert into orders (user_id, product_name, price)
@@ -137,6 +226,7 @@ def create_order(order: Order):
 
 @router.delete("/{id}")
 def delete_order(id: int):
+    print(f"Deleting order with id: {id}")
     cursor.execute(
         "delete from orders where id = %s returning *", (id,)
     )
@@ -145,7 +235,7 @@ def delete_order(id: int):
     conn.commit()
 
     if deleted_order is None:
-        raise HTTPException(status_code=404, detail = "Order not found")
+        raise HTTPException(status_code=404, detail = {"error": "Order not found"})
     
     return {
         "message": "Order deleted successfully",

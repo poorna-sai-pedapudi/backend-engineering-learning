@@ -27,7 +27,10 @@ def hello():
 def search(name: str):
     return {"searching_for": name}
 
-
+# health  check API
+@app.get("/health")
+def health_check():
+    return {"status": "running"}
 
 
 

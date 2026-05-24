@@ -16,3 +16,26 @@ def verify_password(password: str, hashed_password: str):
     hashed_password_bytes = hashed_password.encode("utf-8")
     
     return bcrypt.checkpw(password_bytes, hashed_password_bytes)
+
+def authenticate_user(email: str, password: str, cursor):
+
+    cursor.execute(
+        """
+        select id, name, email, age, password
+        from users
+        where email = %s
+        """,
+        (email,)
+    )
+
+    user = cursor.fetchone()
+
+    if user is None:
+        return None
+    
+    is_password_valid = verify_password(password, user["password"])
+
+    if not is_password_valid:
+        return None
+    
+    return user

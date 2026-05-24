@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, status, Query
 from database import cursor, conn
 from models import User, LoginUser
-from auth import hash_password, verify_password
+from auth import hash_password, verify_password, authenticate_user
 import logging
 
 router = APIRouter()
@@ -23,7 +23,7 @@ def get_users(
     logger.info(f"Fetching all users page = {page}, limit = {limit}")
 
     offset = (page - 1) * limit
-    cursor.execute("select * from users order by id limit %s offset %s", (limit, offset))
+    cursor.execute("select id, name, email, age from users order by id limit %s offset %s", (limit, offset))
     
     users = cursor.fetchall()
     cursor.execute("select count(*) as total from users")
@@ -45,10 +45,11 @@ def get_users(
 
 @router.get("/search")
 def search_users(name: str):
-    print("Fetching user by name...")
+    logger.info(f"Searching users by name = {name}")
     cursor.execute(
         """
-        select * from users
+        select id, name, email, age
+        from users
         where name ilike %s
         order by id
         """,
@@ -72,10 +73,11 @@ def search_users(name: str):
 
 @router.get("/filter/age")
 def users_by_age(min_age: int): 
-    print("Fetching by user age...")
+    logger.info(f"Filtering users by min_age = {min_age}")
     cursor.execute(
         """
-        select * from users
+        select id, name, email, age
+        from users
         where age >= %s
         order by age
         """,
@@ -98,7 +100,7 @@ def users_by_age(min_age: int):
 # Adding USER sorting API
 @router.get("/sorted")
 def get_users_sorted(order: str = "asc"):
-    print(f"Fetching users sorted by age, order = {order}")
+    logger.info(f"Fetching users sorted order={order}")
 
     if order.lower() not in ["asc", "desc"]:
         raise HTTPException(
@@ -106,12 +108,13 @@ def get_users_sorted(order: str = "asc"):
             detail = {"error": "Order must be asc or desc"}
         )
     
-    cursor.execute(
-        """
-        select * from users
+    query = f"""
+        select id, name, email, age
+        from users
         order by age {order.upper()}
         """
-    )
+    
+    cursor.execute(query)
 
     users = cursor.fetchall()
 
@@ -126,7 +129,7 @@ def get_users_sorted(order: str = "asc"):
 # Login API for users
 @router.post("/login")
 def login_user(user: LoginUser):
-    print("Logging in user..")
+    logger.info("Logging in user")
 
     cursor.execute(
         """
@@ -140,6 +143,7 @@ def login_user(user: LoginUser):
     existing_user = cursor.fetchone()
 
     if existing_user is None:
+        logger.warning(f"Login failed: user not found for email = {user.email}")
         raise HTTPException(
             status_code=404,
             detail={"error": "User not found"}
@@ -151,12 +155,14 @@ def login_user(user: LoginUser):
     )
 
     if not is_password_valid:
+        logger.warning(f"Login failed: invalid password for email = {user.email}")
         raise HTTPException(
             status_code=401,
             detail={"error": "Invalid Password"}
         )
     
-
+    logger.info(f"Login successful for email = {user.email}")
+    
     return {
         "message": "Login successful",
         "user": {
@@ -168,6 +174,28 @@ def login_user(user: LoginUser):
     }
 
 
+# me route API
+@router.get("/me")
+def get_current_user(email: str, password: str):
+    logger.info(f"fetching current user for email = {email}")
+
+    user = authenticate_user(email, password, cursor)
+
+    if user is None:
+        raise HTTPException(
+            status_code=401,
+            detail={"error": "Invalid email or password"}
+        )
+    
+    return {
+        "id": user["id"],
+        "name": user["name"],
+        "email": user["email"],
+        "age": user["age"]
+    }
+
+
+
 # GET user by id
 # GET /users/ 1
 #API 2
@@ -175,7 +203,7 @@ def login_user(user: LoginUser):
 @router.get("/{id}")
 def get_user(id: int):
     logger.info(f"Fetching user with id= {id}")
-    cursor.execute("select * from users where id = %s", (id,))
+    cursor.execute("select id, name, email, age from users where id = %s", (id,))
     user = cursor.fetchone()
     
     if user is None:
@@ -213,13 +241,13 @@ def create_user(user: User):
 
 @router.put("/{id}")
 def update_user(id: int, user: User):
-    print(f"Updating user with id: {id}")
+    logger.info(f"Updating user with id={id}")
     cursor.execute(
         """
         update users
         set name = %s, email = %s, age = %s
         where id = %s
-        returning *
+        returning id, name, email, age
         
         """,
         (user.name, user.email, user.age, id)
@@ -240,8 +268,8 @@ def update_user(id: int, user: User):
 
 @router.delete("/{id}")
 def delete_user(id: int):
-    print(f"Deleting user with id: {id}")
-    cursor.execute("delete from users where id = %s returning *", (id,))
+    logger.info(f"Deleting user with id={id}")
+    cursor.execute("delete from users where id = %s returning id, name, email, age", (id,))
 
     deleted_user = cursor.fetchone()
     conn.commit()
@@ -256,7 +284,7 @@ def delete_user(id: int):
 # User Order count API
 @router.get("/{id}/order-count")
 def get_user_order_count(id: int):
-    print("Fetching the count...")
+    logger.info(f"Fetching the order count for user id = {id}")
     cursor.execute(
         """
         SELECT users.id AS user_id,

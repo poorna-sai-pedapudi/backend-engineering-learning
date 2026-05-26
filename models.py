@@ -14,3 +14,8 @@ class Order(BaseModel):
 class LoginUser(BaseModel):
     email: EmailStr
     password: str
+
+class UpdateUser(BaseModel):
+    name: str = Field(min_length = 2, max_length = 50, pattern="^[A-Za-z ]+$")
+    email: EmailStr
+    age: int = Field(gt=0, le=120)

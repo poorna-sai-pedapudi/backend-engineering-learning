@@ -104,3 +104,9 @@ order by id;
 select id, name, email, password
 from users
 where email = 'secure@example.com';
+
+alter table users
+add column created_at timestamp default now();
+
+
+select * from users;

@@ -1,7 +1,8 @@
 from math import e
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from routers import users, orders
 from database import cursor
+import time
 import logging
 
 logging.basicConfig(level=logging.INFO)
@@ -67,6 +68,19 @@ def database_health_check():
         )
 
 
+@app.middleware("http")
+async def request_timing__middleware(request: Request, call_next):
+    start_time = time.time()
 
+    response = await call_next(request)
+
+    end_time = time.time()
+    duration = end_time - start_time
+
+    logger.info(
+        f"[MIDDLEWARE] {request.method} {request.url.path} completed in {duration:.4f}s"
+    )
+
+    return response
 
 

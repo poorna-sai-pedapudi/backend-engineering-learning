@@ -1,13 +1,34 @@
+from functools import cache
+import json
 from fastapi import APIRouter, HTTPException, status, Query
 from database import cursor, conn
 from models import User, LoginUser, UpdateUser
 from auth import hash_password, verify_password, authenticate_user
 import logging
 from utils import build_user_response
+from redis_client import redis_client
+
 
 router = APIRouter()
 
 logger = logging.getLogger(__name__)
+
+
+def clear_users_list_cache():
+    keys = redis_client.keys("users:page=*")
+
+    if keys:
+        redis_client.delete(*keys)
+        logger.info(f"[CACHE] Deleted users list cache keys={len(keys)}")
+
+
+
+def clear_search_cache():
+    keys = redis_client.keys("search:*")
+
+    if keys:
+        redis_client.delete(*keys)
+        logger.info(f"[CACHE] Deleted users list cache keys={len(keys)}")
 
 
 ################################ USERS ########################################################
@@ -16,12 +37,25 @@ logger = logging.getLogger(__name__)
 # GET /users
 #API 1
 
+
+
 @router.get("/")
 def get_users(
     page:int = Query(1, ge=1),
     limit: int = Query(5, ge=1, le=50)
     ):
     logger.info(f"[Users] Fetch users page = {page}, limit = {limit}")
+
+    cache_key = f"users:page={page}:limit={limit}"
+
+    cached_users = redis_client.get(cache_key)
+
+    if cached_users:
+        logger.info(f"[CACHE] Cache HIT for users page = {page}")
+
+        return json.loads(cached_users)
+    
+    logger.info(f"[CACHE] Cache MISS for users page = {page}")
 
     offset = (page - 1) * limit
     cursor.execute("select id, name, email, age, created_at from users order by id limit %s offset %s", (limit, offset))
@@ -30,13 +64,21 @@ def get_users(
     cursor.execute("select count(*) as total from users")
     total = cursor.fetchone()["total"]
 
-    return {
+    response = {
         "page": page,
         "limit": limit,
         "count": len(users),
         "total": total,
         "data": users
     }
+
+    redis_client.setex(
+        cache_key,
+        60,
+        json.dumps(response, default=str)
+    )
+
+    return response
 
 
 ################################ USERS & ORDERS ########################################################
@@ -47,6 +89,17 @@ def get_users(
 @router.get("/search")
 def search_users(name: str):
     logger.info(f"[Users] Search users by name = {name}")
+
+    cache_key = f"search:name = {name.lower()}"
+
+    cached_search = redis_client.get(cache_key)
+
+    if cached_search:
+        logger.info(f"[CACHE] Search cache HIT for name={name}")
+        return json.loads(cached_search)
+    
+    logger.info(f"[CACHE] Search cache MISS for name = {name}")
+
     cursor.execute(
         """
         select id, name, email, age, created_at
@@ -62,12 +115,20 @@ def search_users(name: str):
     if len(users) == 0:
         raise HTTPException(status_code=404, detail = "No Users found")
     
-    return {
+    response = {
         "filter": "name",
         "value": name, 
         "count": len(users),
         "data": users
     }
+
+    redis_client.setex(
+        cache_key,
+        60,
+        json.dumps(response, default=str)
+    )
+
+    return response
 
 # API 2
 # Users by Minimum Age
@@ -207,14 +268,37 @@ def get_current_user(email: str, password: str):
 
 @router.get("/{id}")
 def get_user(id: int):
+
     logger.info(f"[USERS] Fetch user id={id}")
+
+    cache_key = f"user:{id}"
+
+    cached_user = redis_client.get(cache_key)
+
+    if cached_user:
+        logger.info(f"[CACHE] Cache HIT for user id = {id}")
+
+        return json.loads(cached_user)
+    
+    logger.info(f"[CACHE] Cache MISS for user id = {id}")
+
     cursor.execute("select id, name, email, age, created_at from users where id = %s", (id,))
+
     user = cursor.fetchone()
     
     if user is None:
-        raise HTTPException(status_code=404, detail = {"error": "User not found"})
+        raise HTTPException(
+            status_code=404, 
+            detail = {"error": "User not found"}
+        )
     
-    return user
+    redis_client.setex(
+        cache_key,
+        60,
+        json.dumps(build_user_response(user), default = str)
+    )
+    
+    return build_user_response(user)
 
 
 #Create user
@@ -238,6 +322,10 @@ def create_user(user: User):
     new_user = cursor.fetchone()
     conn.commit() #to save the changes permanently
 
+    clear_users_list_cache()
+
+    clear_search_cache()
+
     return new_user
 
 #Updating the user
@@ -260,8 +348,14 @@ def update_user(id: int, user: UpdateUser):
     updated_user = cursor.fetchone()
     conn.commit()
 
+
     if updated_user is None:
         raise HTTPException(status_code=404, detail = {"error": "User not found"})
+    
+    redis_client.delete(f"user:{id}")
+    clear_users_list_cache()
+    clear_search_cache()
+    logger.info(f"[CACHE] Deleted cache for updated user id = {id}")
     
     return updated_user
     
@@ -278,8 +372,15 @@ def delete_user(id: int):
     deleted_user = cursor.fetchone()
     conn.commit()
 
+
+
     if deleted_user is None:
         raise HTTPException(status_code=404, detail = {"error": "User not found"})
+    
+    redis_client.delete(f"user:{id}")
+    clear_users_list_cache()
+    clear_search_cache()
+    logger.info(f"[CACHE] Deleted cache for deleted for user id = {id}")
     
     return deleted_user
 

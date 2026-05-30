@@ -1,5 +1,6 @@
 from math import e
 from fastapi import FastAPI, HTTPException, Request
+from redis_client import redis_client
 from routers import users, orders
 from database import cursor
 import time
@@ -58,6 +59,30 @@ def database_health_check():
     
     except Exception as e:
         logger.error(f"Database health check failed: {e}")
+
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "status": "disconnected",
+                "error": str(e)
+            }
+        )
+
+
+@app.get("/health/redis")
+def redis_health_check():
+    logger.info("Redis health check requested")
+
+    try:
+        redis_client.ping()
+
+        return {
+            "status": "connected",
+            "service": "Redis"
+        }
+    
+    except Exception as e:
+        logger.error(f"Redis health check failed: {e}")
 
         raise HTTPException(
             status_code=500,

@@ -6,18 +6,7 @@ from psycopg2.extras import RealDictCursor
 
 load_dotenv()
 
-
-# conn = psycopg2.connect(
-#     #host = "host.docker.internal",
-#     #host="localhost",
-#     database = "backend_learning",
-#     user = "postgres",
-#     password = "mahimhari69",
-#     cursor_factory=RealDictCursor
-# )
-
-# cursor = conn.cursor()
-
+print(f"Connecting to database on host={os.getenv('DB_HOST')}")
 
 conn = psycopg2.connect(
     host = os.getenv("DB_HOST"),

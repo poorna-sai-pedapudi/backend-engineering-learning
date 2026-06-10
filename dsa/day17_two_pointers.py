@@ -34,3 +34,19 @@ while left < right:
     right -= 1
 
 print(is_palindrome)
+
+
+# Problem 3, Move zeroes to end
+
+nums = [1,0,2,0,4]
+
+#expected = [1,2,4,0,0]
+
+left = 0
+
+for right in range(len(nums)):
+    if nums[right] != 0:
+        nums[left], nums[right] = nums[right], nums[left]
+        left += 1
+
+print(nums)

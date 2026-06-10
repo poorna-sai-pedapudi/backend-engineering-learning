@@ -5,9 +5,9 @@ from database import cursor, conn
 from models import User, LoginUser, UpdateUser
 from auth import hash_password, verify_password, authenticate_user
 import logging
-from utils import build_user_response
+from utils import build_user_response, error_response
 from redis_client import redis_client
-
+from services.user_service import get_user_by_id
 
 router = APIRouter()
 
@@ -208,7 +208,7 @@ def login_user(user: LoginUser):
         logger.warning(f"[AUTH] Login failed user not found for email = {user.email}")
         raise HTTPException(
             status_code=404,
-            detail={"error": "User not found"}
+            detail=error_response("User not found")
         )
     
     is_password_valid = verify_password(
@@ -220,7 +220,7 @@ def login_user(user: LoginUser):
         logger.warning(f"[AUTH] Login failed invalid password for email = {user.email}")
         raise HTTPException(
             status_code=401,
-            detail={"error": "Invalid Password"}
+            detail=error_response("Invalid password")
         )
     
     logger.info(f"[AUTH] Login successful for email = {user.email}")
@@ -268,37 +268,7 @@ def get_current_user(email: str, password: str):
 
 @router.get("/{id}")
 def get_user(id: int):
-
-    logger.info(f"[USERS] Fetch user id={id}")
-
-    cache_key = f"user:{id}"
-
-    cached_user = redis_client.get(cache_key)
-
-    if cached_user:
-        logger.info(f"[CACHE] Cache HIT for user id = {id}")
-
-        return json.loads(cached_user)
-    
-    logger.info(f"[CACHE] Cache MISS for user id = {id}")
-
-    cursor.execute("select id, name, email, age, created_at from users where id = %s", (id,))
-
-    user = cursor.fetchone()
-    
-    if user is None:
-        raise HTTPException(
-            status_code=404, 
-            detail = {"error": "User not found"}
-        )
-    
-    redis_client.setex(
-        cache_key,
-        60,
-        json.dumps(build_user_response(user), default = str)
-    )
-    
-    return build_user_response(user)
+    return get_user_by_id(id)
 
 
 #Create user
@@ -350,7 +320,7 @@ def update_user(id: int, user: UpdateUser):
 
 
     if updated_user is None:
-        raise HTTPException(status_code=404, detail = {"error": "User not found"})
+        raise HTTPException(status_code=404, detail = error_response("User not found"))
     
     redis_client.delete(f"user:{id}")
     clear_users_list_cache()
@@ -373,9 +343,8 @@ def delete_user(id: int):
     conn.commit()
 
 
-
     if deleted_user is None:
-        raise HTTPException(status_code=404, detail = {"error": "User not found"})
+        raise HTTPException(status_code=404, detail = error_response("User not found"))
     
     redis_client.delete(f"user:{id}")
     clear_users_list_cache()

@@ -5,6 +5,9 @@ from routers import users, orders
 from database import cursor
 import time
 import logging
+import json
+from services.dashboard_service import get_dashboard_metrics
+
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -109,3 +112,6 @@ async def request_timing__middleware(request: Request, call_next):
     return response
 
 
+@app.get("/dashboard")
+def dashboard():
+    return get_dashboard_metrics()

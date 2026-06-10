@@ -110,3 +110,66 @@ add column created_at timestamp default now();
 
 
 select * from users;
+
+select * from orders;
+
+create index idx_users_email
+on users(email);
+
+select * from pg_indexes 
+where tablename = 'users';
+
+
+explain analyze 
+select *
+from users
+where email = 'harish.pedapudi@example.com';
+
+explain analyze 
+select *
+from users
+where age = 25;
+
+
+select *
+from orders
+where user_id = 1;
+
+
+select *
+from orders
+where user_id = 1
+and price > 100;
+
+create index idx_orders_user_price
+on orders(user_id, price);
+
+
+select indexname, indexdef
+from pg_indexes
+where tablename = 'orders';
+
+explain analyze 
+select *
+from orders
+where user_id = 1;
+
+
+explain analyze 
+select *
+from orders
+where user_id = 1
+and price > 100;
+
+
+explain analyze 
+select *
+from orders
+where price > 100;
+
+
+select 1;
+
+select *
+from users
+order by id;

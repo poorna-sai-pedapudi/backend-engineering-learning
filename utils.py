@@ -6,3 +6,9 @@ def build_user_response(user):
         "age": user["age"], 
         "created_at": user.get("created_at")
     }
+
+def error_response(message:str):
+    return {
+        "success": False,
+        "error": message
+    }

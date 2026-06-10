@@ -1,12 +1,16 @@
 from fastapi import APIRouter, HTTPException, status
 from database import cursor, conn
 from models import Order
+from redis_client import redis_client
 import logging
-
 
 router = APIRouter()
 
 logger = logging.getLogger(__name__)
+
+def clear_dashboard_cache():
+    redis_client.delete("dashboard:metrics")
+    logger.info("[CACHE] Deleted dashboard metrics cache")
 
 
 ################################ ORDERS ########################################################
@@ -221,6 +225,8 @@ def create_order(order: Order):
     new_order = cursor.fetchone()
     conn.commit()
 
+    clear_dashboard_cache()
+
     return new_order
 
 
@@ -236,6 +242,8 @@ def delete_order(id: int):
 
     deleted_order = cursor.fetchone()
     conn.commit()
+
+    clear_dashboard_cache()
 
     if deleted_order is None:
         raise HTTPException(status_code=404, detail = {"error": "Order not found"})

@@ -40,3 +40,42 @@ def get_user_by_id(id: int):
     )
     
     return build_user_response(user)
+
+
+def get_all_users(page: int = 1, limit: int = 5):
+
+    logger.info(f"[Users] Fetch users page = {page}, limit = {limit}")
+
+    cache_key = f"users:page={page}:limit={limit}"
+
+    cached_users = redis_client.get(cache_key)
+
+    if cached_users:
+        logger.info(f"[CACHE] Cache HIT for users page = {page}")
+
+        return json.loads(cached_users)
+    
+    logger.info(f"[CACHE] Cache MISS for users page = {page}")
+
+    offset = (page - 1) * limit
+    cursor.execute("select id, name, email, age, created_at from users order by id limit %s offset %s", (limit, offset))
+    
+    users = cursor.fetchall()
+    cursor.execute("select count(*) as total from users")
+    total = cursor.fetchone()["total"]
+
+    response = {
+        "page": page,
+        "limit": limit,
+        "count": len(users),
+        "total": total,
+        "data": users
+    }
+
+    redis_client.setex(
+        cache_key,
+        60,
+        json.dumps(response, default=str)
+    )
+
+    return response

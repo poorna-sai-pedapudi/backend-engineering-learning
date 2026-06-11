@@ -7,7 +7,7 @@ from auth import hash_password, verify_password, authenticate_user
 import logging
 from utils import build_user_response, error_response
 from redis_client import redis_client
-from services.user_service import get_user_by_id
+from services.user_service import get_user_by_id, get_all_users
 
 router = APIRouter()
 
@@ -43,42 +43,8 @@ def clear_search_cache():
 def get_users(
     page:int = Query(1, ge=1),
     limit: int = Query(5, ge=1, le=50)
-    ):
-    logger.info(f"[Users] Fetch users page = {page}, limit = {limit}")
-
-    cache_key = f"users:page={page}:limit={limit}"
-
-    cached_users = redis_client.get(cache_key)
-
-    if cached_users:
-        logger.info(f"[CACHE] Cache HIT for users page = {page}")
-
-        return json.loads(cached_users)
-    
-    logger.info(f"[CACHE] Cache MISS for users page = {page}")
-
-    offset = (page - 1) * limit
-    cursor.execute("select id, name, email, age, created_at from users order by id limit %s offset %s", (limit, offset))
-    
-    users = cursor.fetchall()
-    cursor.execute("select count(*) as total from users")
-    total = cursor.fetchone()["total"]
-
-    response = {
-        "page": page,
-        "limit": limit,
-        "count": len(users),
-        "total": total,
-        "data": users
-    }
-
-    redis_client.setex(
-        cache_key,
-        60,
-        json.dumps(response, default=str)
-    )
-
-    return response
+):
+    return get_all_users(page, limit)
 
 
 ################################ USERS & ORDERS ########################################################
